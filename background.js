@@ -13,78 +13,94 @@ chrome.tabGroups.query({}, (groups) => {
 });
 
 async function processTab(tab) {
-  // 1. Skip internal chrome pages
-  if (!tab.url || tab.url.startsWith("chrome://")) return;
+  if (
+    !tab.url ||
+    tab.url.startsWith("chrome://") ||
+    tab.url.startsWith("about:")
+  )
+    return;
 
-  const { customRules = [] } = await chrome.storage.sync.get("customRules");
-  let domainName = getDomain(tab.url);
-  let isCustom = false;
+  try {
+    const { customRules = [] } = await chrome.storage.sync.get("customRules");
+    let groupTitle = getDomain(tab.url); // Default to domain (e.g., "Youtube")
+    let isCustom = false;
 
-  // 2. Regex Check
-  for (const rule of customRules) {
-    try {
-      const regex = new RegExp(rule.regex);
-      if (regex.test(tab.url)) {
-        domainName = rule.name;
-        isCustom = true;
-        break;
+    // 1. Check Custom Rules
+    for (const rule of customRules) {
+      try {
+        const regex = new RegExp(rule.regex);
+        if (regex.test(tab.url)) {
+          groupTitle = rule.name; // Change title to your Custom Name (e.g., "Local")
+          isCustom = true;
+          break;
+        }
+      } catch (e) {
+        console.error("Regex Error:", e);
       }
-    } catch (e) {
-      console.error("Regex Error:", e);
     }
-  }
 
-  // 3. Count matching tabs
-  const allTabs = await chrome.tabs.query({ windowId: tab.windowId });
-  const matchingTabs = allTabs.filter((t) => getDomain(t.url) === domainName);
+    // 2. Get ALL tabs in the window to see who else belongs in this group
+    const allTabs = await chrome.tabs.query({ windowId: tab.windowId });
 
-  // 4. Decision Logic
-  if (matchingTabs.length >= 2 || isCustom) {
-    const groups = await chrome.tabGroups.query({
-      windowId: tab.windowId,
-      title: domainName,
+    const matchingTabs = allTabs.filter((t) => {
+      // A tab matches if:
+      // It matches the same custom rule OR it shares the same raw domain
+      const tabDomain = getDomain(t.url);
+      if (isCustom) {
+        // If we are in a custom rule, we check if this other tab also fits the regex
+        for (const rule of customRules) {
+          if (rule.name === groupTitle) {
+            return new RegExp(rule.regex).test(t.url);
+          }
+        }
+      }
+      return tabDomain === getDomain(tab.url);
     });
-    let targetGroupId = groups.length > 0 ? groups[0].id : undefined;
 
-    // CRITICAL FIX: Run the order/deduplicate function FIRST
-    // to get the clean list of surviving IDs
-    const cleanTabIds = await orderTabsInGroup(
-      targetGroupId,
-      matchingTabs,
-      domainName,
-    );
-
-    if (cleanTabIds.length > 0) {
-      const groupId = await chrome.tabs.group({
-        tabIds: cleanTabIds,
-        groupId: targetGroupId,
+    // 3. Trigger Grouping
+    if (matchingTabs.length >= 2 || isCustom) {
+      // Find existing group by TITLE
+      const existingGroups = await chrome.tabGroups.query({
+        windowId: tab.windowId,
+        title: groupTitle,
       });
 
-      if (!targetGroupId) {
-        await chrome.tabGroups.update(groupId, { title: domainName });
-      }
-    }
-  } else if (matchingTabs.length === 1) {
-    const otherGroups = await chrome.tabGroups.query({
-      windowId: tab.windowId,
-      title: "Other",
-    });
-    let otherGroupId = otherGroups.length > 0 ? otherGroups[0].id : undefined;
+      let targetGroupId =
+        existingGroups.length > 0 ? existingGroups[0].id : undefined;
 
-    try {
+      // Sort and Remove Duplicates
+      const cleanIds = await orderTabsInGroup(targetGroupId, matchingTabs);
+
+      if (cleanIds.length > 0) {
+        const groupId = await chrome.tabs.group({
+          tabIds: cleanIds,
+          groupId: targetGroupId,
+        });
+
+        // ALWAYS ensure the title is set
+        await chrome.tabGroups.update(groupId, { title: groupTitle });
+      }
+    } else {
+      // Move to "Other"
+      const otherGroups = await chrome.tabGroups.query({
+        windowId: tab.windowId,
+        title: "Other",
+      });
+      let otherId = otherGroups.length > 0 ? otherGroups[0].id : undefined;
+
       const groupId = await chrome.tabs.group({
         tabIds: tab.id,
-        groupId: otherGroupId,
+        groupId: otherId,
       });
-      if (!otherGroupId) {
+      if (!otherId) {
         await chrome.tabGroups.update(groupId, {
           title: "Other",
           color: "grey",
         });
       }
-    } catch (e) {
-      console.log("Tab already grouped or closed");
     }
+  } catch (err) {
+    console.error("Grouping Error:", err);
   }
 }
 
