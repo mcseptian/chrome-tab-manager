@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Tab Manager",
+  "version": "1.0",
+  "description": "Auto group tabs by domain, sort them descending, and use custom Regex rules.",
+  "permissions": ["tabs", "tabGroups", "storage"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  }
+}

@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+    <head>
+        <style>
+            body {
+                width: 300px;
+                padding: 15px;
+                font-family: Arial, sans-serif;
+            }
+            input {
+                width: 100%;
+                margin-bottom: 10px;
+                padding: 5px;
+                box-sizing: border-box;
+                max-width: 452px;
+                overflow-wrap: anywhere;
+                padding: 12px 16px;
+                border-radius: 24px;
+            }
+            button {
+                display: block;
+                width: 100%;
+                padding: 12px 16px;
+                cursor: pointer;
+                border-radius: 24px;
+                background: #4caf50;
+                color: white;
+                border: none;
+            }
+            button:hover {
+                background: #45a049;
+            }
+            .rule-list {
+                margin-top: 15px;
+                border-top: 1px solid #ccc;
+                padding-top: 10px;
+            }
+            .rule-item {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 8px;
+                background: #f1f1f1;
+                padding: 12px 16px;
+                border-radius: 24px;
+            }
+            .rule-name {
+                display: flex;
+                flex-direction: column;
+            }
+            .delete-btn {
+                border-radius: 16px;
+                background: #f44336;
+                margin-left: auto;
+                font-size: 12px;
+                line-height: 1;
+                padding: 8px;
+                width: 28px;
+                height: 28px;
+            }
+            .delete-btn:hover {
+                background: #e53935;
+            }
+        </style>
+    </head>
+    <body>
+        <h3>Custom Groups</h3>
+        <label>Regex Pattern:</label>
+        <input type="text" id="regexInput" placeholder="e.g., .*google.*" />
+
+        <label>Group Name:</label>
+        <input type="text" id="nameInput" placeholder="e.g., Google Sites" />
+
+        <button id="addRule">Add Rule</button>
+
+        <div class="rule-list" id="ruleList"></div>
+
+        <script src="popup.js"></script>
+    </body>
+</html>
