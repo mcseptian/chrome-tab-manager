@@ -12,7 +12,7 @@ async function loadRules() {
     div.innerHTML = `
             <div class="rule-name">
               <strong>${rule.name}</strong>
-              <span>(${rule.regex})</span>
+              <span class="rule-regex">(${rule.regex})</span>
             </div>
             <button class="delete-btn" data-index="${index}">x</button>
         `;

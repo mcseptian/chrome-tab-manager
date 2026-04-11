@@ -41,7 +41,6 @@ async function processTab(tab) {
 
     // 2. Get ALL tabs in the window to see who else belongs in this group
     const allTabs = await chrome.tabs.query({ windowId: tab.windowId });
-
     const matchingTabs = allTabs.filter((t) => {
       // A tab matches if:
       // It matches the same custom rule OR it shares the same raw domain
@@ -54,7 +53,7 @@ async function processTab(tab) {
           }
         }
       }
-      return tabDomain === getDomain(tab.url);
+      return getDomain(t.url) === getDomain(tab.url);
     });
 
     // 3. Trigger Grouping
@@ -64,21 +63,35 @@ async function processTab(tab) {
         windowId: tab.windowId,
         title: groupTitle,
       });
-
       let targetGroupId =
         existingGroups.length > 0 ? existingGroups[0].id : undefined;
 
-      // Sort and Remove Duplicates
+      // --- THE CRITICAL FIX START ---
+      // Verify the group ID is actually valid before using it
+      if (targetGroupId) {
+        try {
+          await chrome.tabGroups.get(targetGroupId);
+        } catch (e) {
+          // Group doesn't exist anymore! Reset to undefined to create a new one.
+          targetGroupId = undefined;
+        }
+      }
+      // --- THE CRITICAL FIX END ---
+
       const cleanIds = await orderTabsInGroup(targetGroupId, matchingTabs);
 
       if (cleanIds.length > 0) {
-        const groupId = await chrome.tabs.group({
-          tabIds: cleanIds,
-          groupId: targetGroupId,
-        });
-
-        // ALWAYS ensure the title is set
-        await chrome.tabGroups.update(groupId, { title: groupTitle });
+        try {
+          const groupId = await chrome.tabs.group({
+            tabIds: cleanIds,
+            groupId: targetGroupId, // If this was undefined, a new group is born
+          });
+          await chrome.tabGroups.update(groupId, { title: groupTitle });
+        } catch (groupErr) {
+          // Final fallback: just group without a specific ID if everything else fails
+          const groupId = await chrome.tabs.group({ tabIds: cleanIds });
+          await chrome.tabGroups.update(groupId, { title: groupTitle });
+        }
       }
     } else {
       // Move to "Other"
@@ -88,19 +101,23 @@ async function processTab(tab) {
       });
       let otherId = otherGroups.length > 0 ? otherGroups[0].id : undefined;
 
-      const groupId = await chrome.tabs.group({
-        tabIds: tab.id,
-        groupId: otherId,
-      });
-      if (!otherId) {
-        await chrome.tabGroups.update(groupId, {
-          title: "Other",
-          color: "grey",
-        });
+      if (otherId) {
+        try {
+          await chrome.tabGroups.get(otherId);
+        } catch (e) {
+          otherId = undefined;
+        }
       }
+
+      const gId = await chrome.tabs.group({ tabIds: tab.id, groupId: otherId });
+      await chrome.tabGroups.update(gId, { title: "Other", color: "grey" });
     }
   } catch (err) {
-    console.error("Grouping Error:", err);
+    if (err.message.includes("Tabs cannot be edited")) {
+      setTimeout(() => processTab(tab), 1000);
+    } else {
+      console.error(e);
+    }
   }
 }
 
@@ -113,7 +130,10 @@ async function orderTabsInGroup(groupId, tabsToSort, groupName) {
 
   for (const t of tabsToProcess) {
     if (seenUrls.has(t.url)) {
-      await chrome.tabs.remove(t.id).catch(() => {}); // Catch if already closed
+      await chrome.tabs.remove(t.id).catch((e) => {
+        // Catch if already closed
+        console.error(e);
+      });
     } else {
       seenUrls.add(t.url);
       uniqueTabs.push(t);
