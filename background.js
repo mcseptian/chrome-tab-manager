@@ -21,6 +21,21 @@ async function processTab(tab) {
     return;
 
   try {
+    // 0. Check for duplicates across all windows
+    const allTabsInAllWindows = await chrome.tabs.query({});
+    const duplicate = allTabsInAllWindows.find(
+      (t) => t.id !== tab.id && t.url === tab.url,
+    );
+
+    if (duplicate) {
+      // Focus the existing tab and its window
+      await chrome.tabs.update(duplicate.id, { active: true });
+      await chrome.windows.update(duplicate.windowId, { focused: true });
+      // Remove the new duplicate tab
+      await chrome.tabs.remove(tab.id);
+      return;
+    }
+
     const { customRules = [] } = await chrome.storage.sync.get("customRules");
     let groupTitle = getDomain(tab.url); // Default to domain (e.g., "Youtube")
     let isCustom = false;
@@ -77,7 +92,13 @@ async function processTab(tab) {
         }
       }
 
-      const cleanIds = await orderTabsInGroup(targetGroupId, matchingTabs);
+      const isNewToGroup = tab.groupId !== targetGroupId;
+      const cleanIds = await orderTabsInGroup(
+        targetGroupId,
+        matchingTabs,
+        tab.id,
+        isNewToGroup,
+      );
 
       if (cleanIds.length > 0) {
         try {
@@ -90,7 +111,7 @@ async function processTab(tab) {
           // Final fallback: just group without a specific ID if everything else fails
           const groupId = await chrome.tabs.group({ tabIds: cleanIds });
           await chrome.tabGroups.update(groupId, { title: groupTitle });
-          console.error("[Tab Manager] New Group Error:", e);
+          console.error("[Tab Manager] New Group Error:", groupErr);
         }
       }
     } else {
@@ -110,8 +131,20 @@ async function processTab(tab) {
         }
       }
 
+      // Check if it's new to the "Other" group to decide on positioning
+      const isNewToOther = tab.groupId !== otherId;
+      const otherTabs = otherId
+        ? await chrome.tabs.query({ groupId: otherId })
+        : [];
+
       const gId = await chrome.tabs.group({ tabIds: tab.id, groupId: otherId });
       await chrome.tabGroups.update(gId, { title: "Other", color: "grey" });
+
+      // If it just joined "Other", move it to the front of that group
+      if (isNewToOther && otherTabs.length > 0) {
+        const startIndex = Math.min(...otherTabs.map((t) => t.index));
+        await chrome.tabs.move(tab.id, { index: startIndex });
+      }
     }
   } catch (err) {
     if (err.message.includes("Tabs cannot be edited")) {
@@ -120,37 +153,27 @@ async function processTab(tab) {
   }
 }
 
-async function orderTabsInGroup(groupId, tabsToSort, groupName) {
-  const seenUrls = new Set();
-  const uniqueTabs = [];
+async function orderTabsInGroup(groupId, tabsToSort, activeTabId, isNew) {
+  // Use the tabs directly since duplicates are now handled at the start of processTab
+  const uniqueTabs = [...tabsToSort];
 
-  // Reverse to keep NEWER tabs (in case old tabs in sleep state)
-  const tabsToProcess = [...tabsToSort].reverse();
+  // Sort based on current index to maintain order
+  uniqueTabs.sort((a, b) => a.index - b.index);
 
-  for (const t of tabsToProcess) {
-    if (seenUrls.has(t.url)) {
-      await chrome.tabs.remove(t.id).catch((e) => {
-        // Catch if already closed
-        console.error("[Tab Manager] Remove Tab Error:", e);
-      });
-    } else {
-      seenUrls.add(t.url);
-      uniqueTabs.push(t);
+  // If it's a new tab for this group, move it to the first position
+  if (isNew && activeTabId) {
+    const activeIndex = uniqueTabs.findIndex((t) => t.id === activeTabId);
+    if (activeIndex > -1) {
+      const [activeTab] = uniqueTabs.splice(activeIndex, 1);
+      uniqueTabs.unshift(activeTab);
     }
   }
-
-  // Sort descending
-  uniqueTabs.sort((a, b) => {
-    const valA = (a.title || a.url).toLowerCase();
-    const valB = (b.title || b.url).toLowerCase();
-    return valA < valB ? 1 : -1;
-  });
 
   const cleanIds = uniqueTabs.map((t) => t.id);
 
   // If already in a group, move them to the sorted order
   if (groupId && cleanIds.length > 0) {
-    const startIndex = Math.min(...uniqueTabs.map((t) => t.index));
+    const startIndex = Math.min(...tabsToSort.map((t) => t.index));
     await chrome.tabs.move(cleanIds, { index: startIndex }).catch((e) => {
       console.error("[Tab Manager] Move Tab Error:", e);
     });
