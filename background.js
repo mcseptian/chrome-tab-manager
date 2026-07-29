@@ -9,7 +9,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 // This adds a small number badge to the icon
 chrome.tabGroups.query({}, (groups) => {
   chrome.action.setBadgeText({ text: groups.length.toString() });
-  chrome.action.setBadgeBackgroundColor({ color: "#4CAF50" }); // Green background
+  chrome.action.setBadgeBackgroundColor({ color: "#282828" });
 });
 
 async function processTab(tab) {
