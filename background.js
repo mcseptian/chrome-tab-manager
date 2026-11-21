@@ -43,15 +43,24 @@ async function processTab(tab) {
 
   try {
     // 0. Check for duplicates across all windows
+    // Normalize URLs by removing the hash and any trailing slash so that
+    // "https://example.com/page" and "https://example.com/page/#section"
+    // are treated as the same tab.
     const allTabsInAllWindows = await chrome.tabs.query({});
+    const normalizedCurrent = normalizeUrlForDuplicate(tab.url);
     const duplicate = allTabsInAllWindows.find(
-      (t) => t.id !== tab.id && t.url === tab.url,
+      (t) => t.id !== tab.id && normalizeUrlForDuplicate(t.url) === normalizedCurrent,
     );
 
     if (duplicate) {
-      await chrome.tabs.update(duplicate.id, { active: true });
-      await chrome.windows.update(duplicate.windowId, { focused: true });
-      await chrome.tabs.remove(tab.id);
+      debugLog("[Tab Manager] Duplicate tab found:", tab.url, "existing tab:", duplicate.id);
+      try {
+        await chrome.tabs.update(duplicate.id, { active: true });
+        await chrome.windows.update(duplicate.windowId, { focused: true });
+        await chrome.tabs.remove(tab.id);
+      } catch (e) {
+        console.error("[Tab Manager] Duplicate Removal Error:", e);
+      }
       return;
     }
 
@@ -220,6 +229,22 @@ async function orderTabsInGroup(groupId, tabsToSort, activeTabId, isNew) {
   }
 
   return cleanIds;
+}
+
+function normalizeUrlForDuplicate(urlString) {
+  try {
+    const url = new URL(urlString);
+    // Drop the hash
+    url.hash = "";
+    // Remove a trailing slash from the pathname (but keep "/" for the root)
+    if (url.pathname.length > 1 && url.pathname.endsWith("/")) {
+      url.pathname = url.pathname.replace(/\/+$/, "");
+    }
+    return url.href;
+  } catch {
+    // Fall back to the raw string if the URL can't be parsed
+    return (urlString || "").split("#")[0].replace(/\/+$/, "");
+  }
 }
 
 function getHostname(urlString) {
