@@ -3,6 +3,10 @@ body {
     padding: 15px;
     width: 300px;
 }
+label {
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
 input {
     border-radius: 4px;
     box-sizing: border-box;
@@ -21,6 +25,7 @@ button {
     color: #f8f8f8;
     cursor: pointer;
     display: block;
+    margin-bottom: 8px;
     padding: 12px 16px;
     width: 100%;
 }
@@ -33,7 +38,7 @@ button:hover {
     padding-top: 10px;
 }
 .rule-item {
-    align-items: center;
+    align-items: flex-start;
     background: #f1f1f1;
     border-radius: 4px;
     display: flex;
@@ -44,10 +49,26 @@ button:hover {
 .rule-name {
     display: flex;
     flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+.rule-title {
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    display: -webkit-box;
+    font-size: 12px;
+    height: 28px;
+    line-height: 1.25;
+    margin-bottom: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .rule-regex {
     font-family: "Courier New", Courier, monospace;
-    margin-top: 8px;
+    overflow-wrap: anywhere;
+    word-break: break-all;
 }
 .delete-btn {
     background: #f44336;
@@ -55,7 +76,7 @@ button:hover {
     font-size: 12px;
     height: 28px;
     line-height: 1;
-    padding: 8px;
+    padding: 8px 12px;
     text-align: center;
     vertical-align: middle;
     width: 28px;
@@ -97,6 +118,10 @@ button:hover {
 .group-info {
     display: flex;
     flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 .tab-count {
     font-size: 0.85em;

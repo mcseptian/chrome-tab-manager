@@ -3,6 +3,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadRules();
 });
 document.getElementById("addRule").addEventListener("click", addRule);
+document.getElementById("generateRegex").addEventListener("click", generateRegex);
 
 async function loadGroups() {
   const groupList = document.getElementById("groupList");
@@ -64,7 +65,7 @@ async function loadRules() {
     div.className = "rule-item";
     div.innerHTML = `
             <div class="rule-name">
-              <strong>${rule.name}</strong>
+              <strong class="rule-title">${rule.name}</strong>
               <span class="rule-regex">(${rule.regex})</span>
             </div>
             <button class="delete-btn" data-index="${index}">x</button>
@@ -77,9 +78,38 @@ async function loadRules() {
   });
 }
 
+function escapeRegex(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function generateRegex() {
+  const input = document.getElementById("domainInput").value;
+  const domains = input
+    .split(/[,;\n]+/)
+    .map((d) => d.trim())
+    .filter(Boolean);
+
+  if (domains.length === 0) {
+    alert("Please enter at least one domain");
+    return;
+  }
+
+  const parts = domains.map((domain) => {
+    // Allow optional subdomains for multi-part domains (e.g. sbonline-dev.ph).
+    if (domain.includes(".")) {
+      const escaped = escapeRegex(domain);
+      return `(?:[a-zA-Z0-9-]+\\.)*${escaped}`;
+    }
+    return escapeRegex(domain);
+  });
+
+  const regex = `^(${parts.join("|")})$`;
+  document.getElementById("regexInput").value = regex;
+}
+
 async function addRule() {
-  const regex = document.getElementById("regexInput").value;
-  const name = document.getElementById("nameInput").value;
+  const regex = document.getElementById("regexInput").value.trim();
+  const name = document.getElementById("nameInput").value.trim();
 
   if (!regex || !name) return alert("Please fill both fields");
 
@@ -87,6 +117,7 @@ async function addRule() {
   try {
     new RegExp(regex);
   } catch (e) {
+    console.error("Invalid Regex pattern:", e);
     return alert("Invalid Regex pattern");
   }
 
